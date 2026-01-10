@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.db.mongodb import MongoDB
 from app.api.routes import router
+from app.api.document_routes import router as document_router
 
 
 @asynccontextmanager
@@ -71,6 +72,7 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router)
+app.include_router(document_router)
 
 
 @app.get("/")

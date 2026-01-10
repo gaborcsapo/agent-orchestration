@@ -1,0 +1,1148 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import { Upload, FileText, User, Loader2, CheckCircle, AlertCircle, Circle, Database, Brain, Sparkles } from 'lucide-react';
+
+interface Document {
+  document_id: string;
+  filename: string;
+  doc_type: string;
+  upload_date: string | null;
+}
+
+interface KeyFacts {
+  income_indicators?: string[];
+  monthly_income?: string;
+  total_assets?: string;
+  monthly_liabilities?: string;
+  debt_indicators?: string[];
+  assets_mentioned?: string[];
+  financial_goals?: string[];
+  risk_factors?: string[];
+  monthly_expenses?: string;
+  risk_appetite?: string;
+  portfolio_allocation?: {
+    stocks_percent?: string;
+    bonds_percent?: string;
+    cash_percent?: string;
+    other_percent?: string;
+  };
+}
+
+interface FinancialContext {
+  user_id: string;
+  roast: string;
+  financial_context: string;
+  key_facts: KeyFacts;
+  last_updated: string | null;
+  document_count: number;
+  emoji?: string;
+  negotiation_strategy?: string;
+}
+
+interface UserProfile {
+  user_id: string;
+  age: number;
+  state: string;
+  filing_status: string;
+  created_at: string;
+}
+
+interface ProgressStep {
+  step: number;
+  name: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'error';
+  message?: string;
+  metadata?: {
+    model?: string;
+    characters?: number;
+    preview?: string;
+    embedding_dimensions?: number;
+    sample_vector?: number[];
+    chunks_to_embed?: number;
+    embedding_count?: number;
+    [key: string]: any;
+  };
+}
+
+const STEP_ICONS: Record<string, React.ReactNode> = {
+  upload: <Upload className="w-4 h-4" />,
+  extract: <Brain className="w-4 h-4" />,
+  chunk: <FileText className="w-4 h-4" />,
+  embed: <Sparkles className="w-4 h-4" />,
+  store: <Database className="w-4 h-4" />,
+  fetch: <Database className="w-4 h-4" />,
+  analyze: <Brain className="w-4 h-4" />,
+};
+
+const STEP_LABELS: Record<string, string> = {
+  upload: 'Upload',
+  extract: 'Extract Text',
+  chunk: 'Chunk',
+  embed: 'Embed (Voyage AI)',
+  store: 'Store (MongoDB)',
+  fetch: 'Fetch Documents',
+  analyze: 'Analyze (Fireworks LLM)',
+};
+
+export default function Home() {
+  const [userId, setUserId] = useState('');
+  const [age, setAge] = useState('');
+  const [state, setState] = useState('');
+  const [filingStatus, setFilingStatus] = useState('single');
+  const [activeUserId, setActiveUserId] = useState('');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [context, setContext] = useState<FinancialContext | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [uploadProgressSteps, setUploadProgressSteps] = useState<ProgressStep[]>([]);
+  const [contextProgressSteps, setContextProgressSteps] = useState<ProgressStep[]>([]);
+  const [negotiationStrategy, setNegotiationStrategy] = useState('');
+  const [savingStrategy, setSavingStrategy] = useState(false);
+
+  const API_BASE = '/api';
+
+  // Generate consistent color scheme based on user ID
+  const getUserColorScheme = (uid: string) => {
+    if (!uid) {
+      return {
+        from: 'from-blue-600',
+        via: 'via-cyan-600',
+        to: 'to-teal-600',
+        fromLight: 'from-blue-50',
+        viaLight: 'via-cyan-50',
+        toLight: 'to-teal-50',
+        border: 'border-cyan-200',
+        borderDark: 'border-cyan-400',
+        text: 'text-cyan-600',
+        bg: 'bg-cyan-100',
+        name: 'blue-cyan-teal'
+      };
+    }
+
+    // Simple hash function to generate consistent colors
+    let hash = 0;
+    for (let i = 0; i < uid.length; i++) {
+      hash = uid.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % 6;
+
+    const colorSchemes = [
+      {
+        from: 'from-blue-600',
+        via: 'via-cyan-600',
+        to: 'to-teal-600',
+        fromLight: 'from-blue-50',
+        viaLight: 'via-cyan-50',
+        toLight: 'to-teal-50',
+        border: 'border-cyan-200',
+        borderDark: 'border-cyan-400',
+        text: 'text-cyan-600',
+        bg: 'bg-cyan-100',
+        name: 'blue-cyan-teal'
+      },
+      {
+        from: 'from-purple-600',
+        via: 'via-pink-600',
+        to: 'to-rose-600',
+        fromLight: 'from-purple-50',
+        viaLight: 'via-pink-50',
+        toLight: 'to-rose-50',
+        border: 'border-pink-200',
+        borderDark: 'border-pink-400',
+        text: 'text-pink-600',
+        bg: 'bg-pink-100',
+        name: 'purple-pink-rose'
+      },
+      {
+        from: 'from-emerald-600',
+        via: 'via-green-600',
+        to: 'to-lime-600',
+        fromLight: 'from-emerald-50',
+        viaLight: 'via-green-50',
+        toLight: 'to-lime-50',
+        border: 'border-green-200',
+        borderDark: 'border-green-400',
+        text: 'text-green-600',
+        bg: 'bg-green-100',
+        name: 'emerald-green-lime'
+      },
+      {
+        from: 'from-orange-600',
+        via: 'via-amber-600',
+        to: 'to-yellow-600',
+        fromLight: 'from-orange-50',
+        viaLight: 'via-amber-50',
+        toLight: 'to-yellow-50',
+        border: 'border-amber-200',
+        borderDark: 'border-amber-400',
+        text: 'text-amber-600',
+        bg: 'bg-amber-100',
+        name: 'orange-amber-yellow'
+      },
+      {
+        from: 'from-indigo-600',
+        via: 'via-violet-600',
+        to: 'to-purple-600',
+        fromLight: 'from-indigo-50',
+        viaLight: 'via-violet-50',
+        toLight: 'to-purple-50',
+        border: 'border-violet-200',
+        borderDark: 'border-violet-400',
+        text: 'text-violet-600',
+        bg: 'bg-violet-100',
+        name: 'indigo-violet-purple'
+      },
+      {
+        from: 'from-red-600',
+        via: 'via-rose-600',
+        to: 'to-pink-600',
+        fromLight: 'from-red-50',
+        viaLight: 'via-rose-50',
+        toLight: 'to-pink-50',
+        border: 'border-rose-200',
+        borderDark: 'border-rose-400',
+        text: 'text-rose-600',
+        bg: 'bg-rose-100',
+        name: 'red-rose-pink'
+      },
+    ];
+
+    return colorSchemes[colorIndex];
+  };
+
+  const userColors = getUserColorScheme(activeUserId);
+
+  const clearMessages = () => {
+    setError('');
+    setSuccess('');
+  };
+
+  const createUser = async () => {
+    if (!userId.trim()) {
+      setError('Please enter a user ID');
+      return;
+    }
+    if (!age || parseInt(age) < 18 || parseInt(age) > 120) {
+      setError('Please enter a valid age (18-120)');
+      return;
+    }
+    if (!state.trim()) {
+      setError('Please enter your state');
+      return;
+    }
+
+    clearMessages();
+
+    try {
+      const res = await fetch(`${API_BASE}/users/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          age: parseInt(age),
+          state: state,
+          filing_status: filingStatus,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to create user');
+      }
+
+      const profile = await res.json();
+      setUserProfile(profile);
+      setActiveUserId(userId);
+      setDocuments([]);
+      setContext(null);
+      setSuccess(`User "${userId}" created successfully!`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create user');
+    }
+  };
+
+  const fetchDocuments = async (uid: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/documents?user_id=${uid}`);
+      if (res.ok) {
+        const docs = await res.json();
+        setDocuments(docs);
+      }
+    } catch (err) {
+      console.error('Failed to fetch documents:', err);
+    }
+  };
+
+  const fetchContext = async (uid: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/users/${uid}/context`);
+      if (res.ok) {
+        const ctx = await res.json();
+        setContext(ctx);
+        setNegotiationStrategy(ctx.negotiation_strategy || '');
+      }
+    } catch (err) {
+      console.error('Failed to fetch context:', err);
+    }
+  };
+
+  const saveNegotiationStrategy = async () => {
+    if (!activeUserId) return;
+
+    clearMessages();
+    setSavingStrategy(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/users/${activeUserId}/negotiation-strategy`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ strategy: negotiationStrategy }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to save negotiation strategy');
+      }
+
+      setSuccess('Negotiation strategy saved! Your AI agent will use this during negotiations.');
+      await fetchContext(activeUserId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save negotiation strategy');
+    } finally {
+      setSavingStrategy(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || !activeUserId) return;
+
+    clearMessages();
+    setUploading(true);
+
+    // Initialize progress steps for upload
+    const initialSteps: ProgressStep[] = [
+      { step: 1, name: 'upload', status: 'pending' },
+      { step: 2, name: 'extract', status: 'pending' },
+      { step: 3, name: 'chunk', status: 'pending' },
+      { step: 4, name: 'embed', status: 'pending' },
+      { step: 5, name: 'store', status: 'pending' },
+    ];
+    setUploadProgressSteps(initialSteps);
+
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('user_id', activeUserId);
+
+        // Use streaming endpoint
+        const res = await fetch(`${API_BASE}/documents/ingest-stream`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          let buffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (line.startsWith('event:')) {
+                const eventMatch = line.match(/event: (\w+)/);
+                const dataMatch = line.match(/data: (.+)/);
+
+                if (eventMatch && dataMatch) {
+                  const eventType = eventMatch[1];
+                  const data = JSON.parse(dataMatch[1]);
+
+                  if (eventType === 'progress') {
+                    setUploadProgressSteps(prev =>
+                      prev.map(s =>
+                        s.step === data.step
+                          ? { ...s, status: data.status, message: data.message, metadata: data.metadata }
+                          : s
+                      )
+                    );
+                  } else if (eventType === 'error') {
+                    // Check if it's a rate limit error
+                    const isRateLimit = data.is_rate_limit ||
+                                      data.message?.includes('rate limit') ||
+                                      data.message?.includes('payment method');
+
+                    if (isRateLimit) {
+                      throw new Error(
+                        `⚠️ ${data.message}\n\nPlease wait a minute before trying again, or add a payment method at https://dashboard.voyageai.com/`
+                      );
+                    } else {
+                      throw new Error(data.message);
+                    }
+                  } else if (eventType === 'complete') {
+                    setSuccess(`Successfully uploaded: ${data.filename}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      await fetchDocuments(activeUserId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+      setUploadProgressSteps(prev =>
+        prev.map(s => (s.status === 'in_progress' ? { ...s, status: 'error' } : s))
+      );
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const buildContext = async () => {
+    if (!activeUserId) return;
+
+    clearMessages();
+    setBuilding(true);
+
+    // Initialize progress steps for context building
+    const contextSteps: ProgressStep[] = [
+      { step: 1, name: 'fetch', status: 'pending', message: 'Waiting...' },
+      { step: 2, name: 'analyze', status: 'pending', message: 'Waiting...' },
+      { step: 3, name: 'store', status: 'pending', message: 'Waiting...' },
+    ];
+    setContextProgressSteps(contextSteps);
+
+    try {
+      const res = await fetch(`${API_BASE}/users/${activeUserId}/build-context-stream`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to build context: ${res.statusText}`);
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              const eventMatch = line.match(/event: (\w+)/);
+              const dataMatch = line.match(/data: (.+)/);
+
+              if (eventMatch && dataMatch) {
+                const eventType = eventMatch[1];
+                const data = JSON.parse(dataMatch[1]);
+
+                if (eventType === 'progress') {
+                  setContextProgressSteps((prev) =>
+                    prev.map((s) =>
+                      s.step === data.step
+                        ? { ...s, status: data.status, message: data.message, metadata: data.metadata }
+                        : s
+                    )
+                  );
+                } else if (eventType === 'complete') {
+                  setSuccess('Financial context built successfully!');
+                  await fetchContext(activeUserId);
+                } else if (eventType === 'error') {
+                  throw new Error(data.message || 'Context building failed');
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to build context');
+      setContextProgressSteps((prev) =>
+        prev.map((s) =>
+          s.status === 'in_progress' ? { ...s, status: 'error' } : s
+        )
+      );
+    } finally {
+      setBuilding(false);
+    }
+  };
+
+  const getStepIcon = (step: ProgressStep) => {
+    if (step.status === 'completed') return <CheckCircle className="w-4 h-4 text-green-500" />;
+    if (step.status === 'in_progress') return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+    if (step.status === 'error') return <AlertCircle className="w-4 h-4 text-red-500" />;
+    return <Circle className="w-4 h-4 text-gray-300" />;
+  };
+
+  return (
+    <main className="min-h-screen bg-gray-50">
+      {/* Header with Branding */}
+      <div className={`sticky top-0 z-50 ${userColors.bg} ${userColors.borderDark} border-b-4 shadow-lg`}>
+        <div className="max-w-6xl mx-auto px-6 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-2xl">
+                <span>🤝</span>
+                <span>💰</span>
+              </div>
+              <div>
+                <h1 className={`text-2xl font-bold tracking-tight ${userColors.text}`}>
+                  Atlast We Agree
+                </h1>
+                <p className="text-gray-600 text-xs">
+                  MongoDB Atlas • Fireworks AI • Voyage AI
+                </p>
+              </div>
+            </div>
+            {activeUserId && (
+              <div className="bg-white px-3 py-1.5 rounded-lg border-2 border-gray-300 shadow-md">
+                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Private Context</div>
+                <div className={`text-base font-bold ${userColors.text} flex items-center gap-2`}>
+                  {context?.emoji && <span className="text-xl">{context.emoji}</span>}
+                  {activeUserId}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-4xl mx-auto p-6 py-8">
+
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border-2 border-red-300 rounded-xl shadow-lg flex items-start gap-3 text-red-700 animate-in fade-in slide-in-from-top-2 duration-300">
+          <AlertCircle className="w-6 h-6 flex-shrink-0 mt-0.5" />
+          <div className="whitespace-pre-line font-medium">{error}</div>
+        </div>
+      )}
+      {success && (
+        <div className="mb-6 p-4 bg-green-50 border-2 border-green-300 rounded-xl shadow-lg flex items-center gap-3 text-green-700 animate-in fade-in slide-in-from-top-2 duration-300">
+          <CheckCircle className="w-6 h-6" />
+          <span className="font-medium">{success}</span>
+        </div>
+      )}
+
+      <div className="space-y-6">
+        {/* Step 1: User Creation - At top for initial setup */}
+        <div className="bg-white rounded-2xl shadow-xl border-2 border-blue-100 p-6 hover:shadow-2xl transition-shadow duration-300">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <User className="w-5 h-5 text-blue-600" />
+            </div>
+            Step 1: User Setup
+          </h2>
+          <div className="space-y-3">
+            <input
+              type="text"
+              placeholder="Enter user ID (e.g., partner_a)"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="number"
+                placeholder="Age"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                min="18"
+                max="120"
+                className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+              <input
+                type="text"
+                placeholder="State (e.g., CA)"
+                value={state}
+                onChange={(e) => setState(e.target.value.toUpperCase())}
+                maxLength={2}
+                className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none uppercase"
+              />
+            </div>
+            <select
+              value={filingStatus}
+              onChange={(e) => setFilingStatus(e.target.value)}
+              className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            >
+              <option value="single">Single</option>
+              <option value="married">Married Filing Jointly</option>
+              <option value="head_of_household">Head of Household</option>
+            </select>
+            <button
+              onClick={createUser}
+              className={`w-full px-6 py-3 ${userColors.bg} ${userColors.text} rounded-xl hover:opacity-80 transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 border-2 ${userColors.border}`}
+            >
+              Create User
+            </button>
+          </div>
+          {activeUserId && !context && (
+            <div className={`mt-4 p-4 ${userColors.bg} rounded-xl border-2 ${userColors.border} shadow-md`}>
+              <p className="text-sm text-gray-700 font-medium flex items-center gap-2">
+                <span>🔒 Private context for:</span> <span className={`font-bold ${userColors.text} text-lg`}>{activeUserId}</span>
+              </p>
+              {userProfile && (
+                <p className="text-xs text-gray-600 mt-2 flex gap-3">
+                  <span className="px-2 py-1 bg-white rounded-md">Age: {userProfile.age}</span>
+                  <span className="px-2 py-1 bg-white rounded-md">State: {userProfile.state}</span>
+                  <span className="px-2 py-1 bg-white rounded-md">Filing: {userProfile.filing_status.replace('_', ' ')}</span>
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Step 2: Document Upload */}
+        <div className="bg-white rounded-2xl shadow-xl border-2 border-green-100 p-6 hover:shadow-2xl transition-shadow duration-300">
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <Upload className="w-5 h-5 text-green-600" />
+            </div>
+            Step 2: Upload Documents
+          </h2>
+
+          {!activeUserId ? (
+            <p className="text-gray-500 text-sm">Create a user first to upload documents.</p>
+          ) : (
+            <>
+              <label className="block">
+                <div className="border-3 border-dashed border-green-300 rounded-xl p-10 text-center hover:border-green-500 hover:bg-green-50 cursor-pointer transition-all duration-300 bg-green-50/30">
+                  {uploading ? (
+                    <div className="flex items-center justify-center gap-3 text-gray-700">
+                      <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+                      <span className="font-semibold">Processing...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-12 h-12 mx-auto text-green-500 mb-4" />
+                      <p className="text-gray-700 font-bold text-lg">Click to upload or drag & drop</p>
+                      <p className="text-gray-500 text-sm mt-2 font-medium">
+                        PDF, PNG, JPG, WEBP supported
+                      </p>
+                    </>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  multiple
+                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
+
+              {/* Document Upload Pipeline */}
+              {uploadProgressSteps.length > 0 && (uploading || uploadProgressSteps.some(s => s.status === 'completed')) && (
+                <div className="mt-6 p-5 bg-green-50 rounded-xl border-2 border-green-300 shadow-lg">
+                  <h3 className="text-base font-bold text-green-900 mb-4 flex items-center gap-2">
+                    <div className="p-1.5 bg-green-200 rounded-lg">
+                      <Upload className="w-4 h-4 text-green-700" />
+                    </div>
+                    Document Upload Pipeline
+                  </h3>
+                  <div className="space-y-2">
+                    {uploadProgressSteps.map((step) => (
+                      <div key={step.step} className="border-l-2 border-gray-200 pl-4 pb-3 last:pb-0">
+                        <div className="flex items-center gap-3">
+                          {getStepIcon(step)}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              {STEP_ICONS[step.name]}
+                              <span className={`text-base font-medium ${step.status === 'completed' ? 'text-green-700' : step.status === 'in_progress' ? 'text-blue-700' : 'text-gray-500'}`}>
+                                {STEP_LABELS[step.name]}
+                              </span>
+                            </div>
+                            {step.message && (
+                              <p className="text-sm text-gray-600 mt-0.5 ml-6">{step.message}</p>
+                            )}
+                            {step.metadata && (
+                              <div className="mt-2 ml-6 text-sm bg-white rounded border border-gray-200 p-3">
+                                {step.metadata.model && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-purple-600">Model:</span>{' '}
+                                    <span className="text-gray-700">{step.metadata.model.split('/').pop()}</span>
+                                  </div>
+                                )}
+                                {step.metadata.document_count !== undefined && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-blue-600">Documents:</span>{' '}
+                                    <span className="text-gray-700">{step.metadata.document_count}</span>
+                                  </div>
+                                )}
+                                {step.metadata.documents_to_analyze !== undefined && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-blue-600">Analyzing:</span>{' '}
+                                    <span className="text-gray-700">{step.metadata.documents_to_analyze} documents</span>
+                                  </div>
+                                )}
+                                {step.metadata.summary_length !== undefined && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-green-600">Summary:</span>{' '}
+                                    <span className="text-gray-700">{step.metadata.summary_length} characters</span>
+                                  </div>
+                                )}
+                                {step.metadata.risk_appetite && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-orange-600">Risk Appetite:</span>{' '}
+                                    <span className="text-gray-700 capitalize">{step.metadata.risk_appetite}</span>
+                                  </div>
+                                )}
+                                {step.metadata.style && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-purple-600">Style:</span>{' '}
+                                    <span className="text-gray-700 capitalize">{step.metadata.style}</span>
+                                  </div>
+                                )}
+                                {step.metadata.resolution && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-pink-600">Resolution:</span>{' '}
+                                    <span className="text-gray-700">{step.metadata.resolution}</span>
+                                  </div>
+                                )}
+                                {step.metadata.preview && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-blue-600">Preview:</span>{' '}
+                                    <span className="text-gray-600 italic">{step.metadata.preview.substring(0, 100)}...</span>
+                                  </div>
+                                )}
+                                {step.metadata.embedding_dimensions && (
+                                  <div className="mb-1">
+                                    <span className="font-mono text-green-600">Dimensions:</span>{' '}
+                                    <span className="text-gray-700">{step.metadata.embedding_dimensions}</span>
+                                  </div>
+                                )}
+                                {step.metadata.sample_vector && step.metadata.sample_vector.length > 0 && (
+                                  <div>
+                                    <span className="font-mono text-orange-600">Sample Vector:</span>{' '}
+                                    <span className="text-gray-500 font-mono text-xs">
+                                      [{step.metadata.sample_vector.join(', ')}...]
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 text-sm text-gray-500">
+                <strong>Suggested documents:</strong>
+                <ul className="mt-1 list-disc list-inside">
+                  <li>Tax returns (W-2, 1099, 1040)</li>
+                  <li>Bank statements</li>
+                  <li>Investment/brokerage screenshots</li>
+                  <li>Pay stubs</li>
+                </ul>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Step 3: Document List with Build Context Button */}
+        {documents.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-xl border-2 border-cyan-100 p-6 hover:shadow-2xl transition-shadow duration-300">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
+              <div className="p-2 bg-cyan-100 rounded-lg">
+                <FileText className="w-5 h-5 text-cyan-600" />
+              </div>
+              Step 3: Build Financial Context ({documents.length} documents)
+            </h2>
+            <ul className="space-y-3">
+              {documents.map((doc) => (
+                <li
+                  key={doc.document_id}
+                  className="flex items-center justify-between p-4 bg-cyan-50 rounded-xl border border-cyan-200 hover:shadow-md transition-shadow duration-200"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="font-medium text-gray-800">{doc.filename}</p>
+                      <p className="text-xs text-gray-500">
+                        {doc.doc_type.toUpperCase()}
+                        {doc.upload_date && ` - ${new Date(doc.upload_date).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            <button
+              onClick={buildContext}
+              disabled={building || documents.length === 0}
+              className={`mt-6 w-full py-4 ${userColors.bg} ${userColors.text} rounded-xl font-bold text-lg hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 border-2 ${userColors.border}`}
+            >
+              {building ? (
+                <>
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  Building Financial Context...
+                </>
+              ) : (
+                <>
+                  <Brain className="w-6 h-6" />
+                  Build Financial Context
+                </>
+              )}
+            </button>
+
+            {/* Context Building Pipeline */}
+            {contextProgressSteps.length > 0 && (building || contextProgressSteps.some(s => s.status === 'completed')) && (
+              <div className="mt-6 p-5 bg-cyan-50 rounded-xl border-2 border-cyan-300 shadow-lg">
+                <h3 className="text-base font-bold text-cyan-900 mb-4 flex items-center gap-2">
+                  <div className="p-1.5 bg-cyan-200 rounded-lg">
+                    <Brain className="w-4 h-4 text-cyan-700" />
+                  </div>
+                  Context Building Pipeline
+                </h3>
+                <div className="space-y-2">
+                  {contextProgressSteps.map((step) => (
+                    <div key={step.step} className="border-l-2 border-gray-200 pl-4 pb-3 last:pb-0">
+                      <div className="flex items-center gap-3">
+                        {getStepIcon(step)}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            {STEP_ICONS[step.name]}
+                            <span className={`text-base font-medium ${step.status === 'completed' ? 'text-green-700' : step.status === 'in_progress' ? 'text-blue-700' : 'text-gray-500'}`}>
+                              {STEP_LABELS[step.name]}
+                            </span>
+                          </div>
+                          {step.message && (
+                            <p className="text-sm text-gray-600 mt-0.5 ml-6">{step.message}</p>
+                          )}
+                          {step.metadata && (
+                            <div className="mt-2 ml-6 text-sm bg-white rounded border border-gray-200 p-3">
+                              {step.metadata.model && (
+                                <div className="mb-1">
+                                  <span className="font-mono text-purple-600">Model:</span>{' '}
+                                  <span className="text-gray-700">{step.metadata.model.split('/').pop()}</span>
+                                </div>
+                              )}
+                              {step.metadata.document_count !== undefined && (
+                                <div className="mb-1">
+                                  <span className="font-mono text-blue-600">Documents:</span>{' '}
+                                  <span className="text-gray-700">{step.metadata.document_count}</span>
+                                </div>
+                              )}
+                              {step.metadata.documents_to_analyze !== undefined && (
+                                <div className="mb-1">
+                                  <span className="font-mono text-blue-600">Analyzing:</span>{' '}
+                                  <span className="text-gray-700">{step.metadata.documents_to_analyze} documents</span>
+                                </div>
+                              )}
+                              {step.metadata.summary_length !== undefined && (
+                                <div className="mb-1">
+                                  <span className="font-mono text-green-600">Summary:</span>{' '}
+                                  <span className="text-gray-700">{step.metadata.summary_length} characters</span>
+                                </div>
+                              )}
+                              {step.metadata.risk_appetite && (
+                                <div className="mb-1">
+                                  <span className="font-mono text-orange-600">Risk Appetite:</span>{' '}
+                                  <span className="text-gray-700 capitalize">{step.metadata.risk_appetite}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 4: Financial Context Results - Appears when context is built */}
+        {context ? (
+          <>
+            {/* Portfolio Roast with Emoji */}
+            {context.roast && (
+              <div className="bg-orange-50 rounded-2xl border-3 border-orange-300 p-6 shadow-2xl hover:shadow-3xl transition-shadow duration-300 animate-in fade-in slide-in-from-top-4">
+                <div className="flex items-start gap-5">
+                  <div className="w-28 h-28 rounded-2xl border-3 border-orange-400 bg-white flex items-center justify-center flex-shrink-0 shadow-lg">
+                    <span className="text-7xl">{context.emoji || '🙂'}</span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-3xl">🔥</span>
+                      <h3 className="text-lg font-bold text-orange-900">Portfolio Roast</h3>
+                    </div>
+                    <p className="text-orange-900 italic text-xl font-medium leading-relaxed">&quot;{context.roast}&quot;</p>
+                    <p className="text-xs text-orange-700 mt-3 font-medium bg-orange-100 px-3 py-1 rounded-full inline-block">
+                      Emoji selected based on your financial profile
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl shadow-xl border-2 border-blue-100 p-6 hover:shadow-2xl transition-shadow duration-300">
+              <h2 className="text-2xl font-bold mb-5 flex items-center gap-2">
+                <span className="text-gray-600">🔒 Private Financial Context for</span> <span className={userColors.text}>{context.user_id}</span>
+              </h2>
+              <div className="prose prose-sm max-w-none">
+                <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-base">{context.financial_context}</p>
+              </div>
+              <div className="mt-5 pt-4 border-t border-gray-200 flex items-center gap-2 text-sm">
+                <Database className="w-4 h-4 text-blue-500" />
+                <p className="text-gray-500 font-medium">
+                  Based on <span className="text-blue-600 font-bold">{context.document_count}</span> document(s)
+                  {context.last_updated && <span className="text-gray-400"> • Updated {new Date(context.last_updated).toLocaleString()}</span>}
+                </p>
+              </div>
+            </div>
+
+            {context.key_facts && Object.keys(context.key_facts).length > 0 && (
+              <div className="bg-white rounded-2xl shadow-xl border-2 border-teal-100 p-6 hover:shadow-2xl transition-shadow duration-300">
+                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                  <Sparkles className="w-6 h-6 text-teal-600" />
+                  Key Financial Facts
+                </h2>
+                <div className="space-y-4">
+                  {/* Primary Financial Metrics */}
+                  <div className="grid grid-cols-3 gap-3 pb-4 border-b border-gray-200">
+                    {context.key_facts.monthly_income && (
+                      <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200">
+                        <div className="text-xs font-medium text-green-700 mb-1">Monthly Income</div>
+                        <div className="text-lg font-bold text-green-900">{context.key_facts.monthly_income}</div>
+                      </div>
+                    )}
+                    {context.key_facts.total_assets && (
+                      <div className="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
+                        <div className="text-xs font-medium text-blue-700 mb-1">Total Assets</div>
+                        <div className="text-lg font-bold text-blue-900">{context.key_facts.total_assets}</div>
+                      </div>
+                    )}
+                    {context.key_facts.monthly_liabilities && (
+                      <div className="bg-red-50 rounded-xl p-4 border-2 border-red-200">
+                        <div className="text-xs font-medium text-red-700 mb-1">Monthly Liabilities</div>
+                        <div className="text-lg font-bold text-red-900">{context.key_facts.monthly_liabilities}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {context.key_facts.income_indicators && context.key_facts.income_indicators.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Income Indicators</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {context.key_facts.income_indicators.map((item, i) => (
+                          <span key={i} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {context.key_facts.assets_mentioned && context.key_facts.assets_mentioned.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Assets</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {context.key_facts.assets_mentioned.map((item, i) => (
+                          <span key={i} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {context.key_facts.debt_indicators && context.key_facts.debt_indicators.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Debts</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {context.key_facts.debt_indicators.map((item, i) => (
+                          <span key={i} className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {context.key_facts.financial_goals && context.key_facts.financial_goals.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Financial Goals</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {context.key_facts.financial_goals.map((item, i) => (
+                          <span key={i} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {context.key_facts.monthly_expenses && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Monthly Expenses</h3>
+                      <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">
+                        {context.key_facts.monthly_expenses}
+                      </span>
+                    </div>
+                  )}
+
+                  {context.key_facts.risk_factors && context.key_facts.risk_factors.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Risk Factors</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {context.key_facts.risk_factors.map((item, i) => (
+                          <span key={i} className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {context.key_facts.risk_appetite && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-500 mb-1">Risk Appetite</h3>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        context.key_facts.risk_appetite === 'aggressive' ? 'bg-red-100 text-red-800' :
+                        context.key_facts.risk_appetite === 'moderate' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {context.key_facts.risk_appetite.charAt(0).toUpperCase() + context.key_facts.risk_appetite.slice(1)}
+                      </span>
+                    </div>
+                  )}
+
+                  {context.key_facts.portfolio_allocation && (
+                    <div className="col-span-full">
+                      <h3 className="text-sm font-medium text-gray-500 mb-2">Portfolio Allocation</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-blue-50 rounded p-2 border border-blue-200">
+                          <div className="text-xs text-gray-500">Stocks</div>
+                          <div className="text-lg font-semibold text-blue-700">{context.key_facts.portfolio_allocation.stocks_percent}</div>
+                        </div>
+                        <div className="bg-green-50 rounded p-2 border border-green-200">
+                          <div className="text-xs text-gray-500">Bonds</div>
+                          <div className="text-lg font-semibold text-green-700">{context.key_facts.portfolio_allocation.bonds_percent}</div>
+                        </div>
+                        <div className="bg-yellow-50 rounded p-2 border border-yellow-200">
+                          <div className="text-xs text-gray-500">Cash</div>
+                          <div className="text-lg font-semibold text-yellow-700">{context.key_facts.portfolio_allocation.cash_percent}</div>
+                        </div>
+                        <div className="bg-purple-50 rounded p-2 border border-purple-200">
+                          <div className="text-xs text-gray-500">Other</div>
+                          <div className="text-lg font-semibold text-purple-700">{context.key_facts.portfolio_allocation.other_percent}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Negotiation Strategy - Secret Instructions for AI Agent */}
+            <div className={`${userColors.bg} rounded-2xl border-3 ${userColors.borderDark} p-6 shadow-2xl hover:shadow-3xl transition-shadow duration-300`}>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-3xl">🤫</span>
+                <div>
+                  <h2 className={`text-xl font-bold ${userColors.text}`}>Secret Negotiation Strategy</h2>
+                  <p className="text-sm text-gray-600">Private instructions for your AI agent (your partner won&apos;t see this!)</p>
+                </div>
+              </div>
+
+              <textarea
+                value={negotiationStrategy}
+                onChange={(e) => setNegotiationStrategy(e.target.value)}
+                placeholder="e.g., &quot;Don't mention my rogue crypto holdings&quot; or &quot;I don't want my partner to know about the emergency fund I've been building&quot; or &quot;Downplay my tech stock exposure&quot;"
+                rows={4}
+                className={`w-full px-4 py-3 border-2 ${userColors.border} rounded-xl focus:ring-2 outline-none bg-white text-gray-800 placeholder:text-gray-400 resize-none`}
+              />
+
+              <button
+                onClick={saveNegotiationStrategy}
+                disabled={savingStrategy || !negotiationStrategy.trim()}
+                className={`mt-4 w-full px-6 py-3 ${userColors.bg} ${userColors.text} rounded-xl hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 flex items-center justify-center gap-2 border-2 ${userColors.border}`}
+              >
+                {savingStrategy ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Saving Strategy...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    Save Secret Strategy
+                  </>
+                )}
+              </button>
+
+              {context.negotiation_strategy && (
+                <div className={`mt-4 p-4 bg-white rounded-xl border-2 ${userColors.border}`}>
+                  <p className={`text-xs font-semibold ${userColors.text} mb-1`}>Current Strategy:</p>
+                  <p className="text-sm text-gray-700 italic">&quot;{context.negotiation_strategy}&quot;</p>
+                </div>
+              )}
+            </div>
+
+            {/* JSON Export for Part 2 */}
+            <div className="bg-gray-900 rounded-2xl p-6 text-white shadow-2xl border-2 border-gray-700">
+              <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Database className="w-5 h-5 text-blue-400" />
+                Agent Context JSON
+              </h2>
+              <pre className="text-xs overflow-auto max-h-64 bg-black/50 p-5 rounded-xl border border-gray-700 font-mono">
+                {JSON.stringify(context, null, 2)}
+              </pre>
+            </div>
+          </>
+        ) : null}
+      </div>
+
+      {/* Footer */}
+      <footer className="mt-12 pb-8">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className={`${userColors.bg} rounded-2xl p-6 text-center shadow-xl border-2 ${userColors.border}`}>
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <span className="text-2xl">🤝</span>
+              <h3 className={`text-xl font-bold ${userColors.text}`}>Atlast we agree</h3>
+              <span className="text-2xl">💰</span>
+            </div>
+            <p className="text-gray-600 text-sm">
+              Hackathon Project • MongoDB Atlas Vector Search • Fireworks AI • Voyage AI
+            </p>
+            {activeUserId && (
+              <div className="mt-3 text-xs text-gray-500">
+                Private context for: <span className={`font-bold ${userColors.text}`}>{activeUserId}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </footer>
+      </div>
+    </main>
+  );
+}

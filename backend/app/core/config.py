@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     # Anthropic Configuration
     anthropic_api_key: str = ""
 
+    # Voyage AI Configuration (for embeddings)
+    voyage_api_key: str = ""
+
+    # Fireworks AI Configuration (for fast inference)
+    fireworks_api_key: str = ""
+    fireworks_vision_model: str = "accounts/jihjihk/deployedModels/llama-v3p2-11b-vision-instruct-s1ctllo1"
+    fireworks_llm_model: str = "accounts/jihjihk/deployedModels/gpt-oss-120b-y2vj6irm"
+
     # MongoDB Configuration
     mongodb_uri: str = ""
     mongodb_db_name: str = "agent_orchestration"
@@ -34,16 +42,26 @@ class Settings(BaseSettings):
         """
         errors = []
 
-        if not self.anthropic_api_key or self.anthropic_api_key == "your-anthropic-api-key-here":
-            errors.append(
-                "ANTHROPIC_API_KEY is not set. "
-                "Get your key at: https://console.anthropic.com/settings/keys"
-            )
+        # Anthropic key is optional - we use Fireworks AI instead
+        # if not self.anthropic_api_key:
+        #     errors.append("ANTHROPIC_API_KEY is not set.")
 
         if not self.mongodb_uri or "username:password" in self.mongodb_uri:
             errors.append(
                 "MONGODB_URI is not set or contains placeholder values. "
                 "Get your connection string from MongoDB Atlas: https://cloud.mongodb.com"
+            )
+
+        if not self.voyage_api_key or self.voyage_api_key == "your-voyage-api-key-here":
+            errors.append(
+                "VOYAGE_API_KEY is not set. "
+                "Get your key at: https://www.voyageai.com/"
+            )
+
+        if not self.fireworks_api_key or self.fireworks_api_key == "your-fireworks-api-key-here":
+            errors.append(
+                "FIREWORKS_API_KEY is not set. "
+                "Get your key at: https://fireworks.ai/"
             )
 
         return errors
