@@ -3,24 +3,32 @@ import { useState, useEffect, useRef } from 'react'
 const API_BASE = '/api'
 
 function App() {
-  const [conversations, setConversations] = useState([])
-  const [currentConversation, setCurrentConversation] = useState(null)
-  const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
+  // Input state
+  const [goal, setGoal] = useState('')
+  const [agentAInfo, setAgentAInfo] = useState('')
+  const [agentBInfo, setAgentBInfo] = useState('')
+
+  // Negotiation state
+  const [isNegotiating, setIsNegotiating] = useState(false)
+  const [turns, setTurns] = useState([])
+  const [status, setStatus] = useState(null) // 'in_progress', 'consensus', 'deadlock'
+  const [finalConclusion, setFinalConclusion] = useState(null)
+  const [currentTurn, setCurrentTurn] = useState(0)
+
+  // UI state
   const [error, setError] = useState(null)
   const [health, setHealth] = useState(null)
-  const messagesEndRef = useRef(null)
 
-  // Scroll to bottom when messages change
+  const transcriptEndRef = useRef(null)
+
+  // Scroll to bottom when turns change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [turns])
 
   // Check health on mount
   useEffect(() => {
     checkHealth()
-    loadConversations()
   }, [])
 
   const checkHealth = async () => {
@@ -37,250 +45,297 @@ function App() {
     }
   }
 
-  const loadConversations = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/conversations`)
-      if (res.ok) {
-        const data = await res.json()
-        setConversations(data.conversations || [])
-      }
-    } catch (e) {
-      console.error('Failed to load conversations:', e)
-    }
-  }
-
-  const loadConversation = async (id) => {
-    try {
-      const res = await fetch(`${API_BASE}/conversations/${id}`)
-      if (res.ok) {
-        const data = await res.json()
-        setCurrentConversation(data.conversation)
-        setMessages(data.messages || [])
-      }
-    } catch (e) {
-      console.error('Failed to load conversation:', e)
-    }
-  }
-
-  const startNewConversation = () => {
-    setCurrentConversation(null)
-    setMessages([])
+  const resetNegotiation = () => {
+    setTurns([])
+    setStatus(null)
+    setFinalConclusion(null)
+    setCurrentTurn(0)
     setError(null)
   }
 
-  const deleteConversation = async (id, e) => {
-    e.stopPropagation()
-    try {
-      await fetch(`${API_BASE}/conversations/${id}`, { method: 'DELETE' })
-      setConversations(conversations.filter(c => c.id !== id))
-      if (currentConversation?.id === id) {
-        startNewConversation()
-      }
-    } catch (e) {
-      console.error('Failed to delete conversation:', e)
+  const startNegotiation = async () => {
+    if (!goal.trim() || !agentAInfo.trim() || !agentBInfo.trim()) {
+      setError('Please fill in the goal and private information for both agents.')
+      return
     }
-  }
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return
-
-    const userMessage = input.trim()
-    setInput('')
-    setError(null)
-    setLoading(true)
-
-    // Add user message to UI immediately
-    const tempUserMsg = {
-      id: 'temp-' + Date.now(),
-      role: 'user',
-      content: userMessage,
-    }
-    setMessages(prev => [...prev, tempUserMsg])
+    resetNegotiation()
+    setIsNegotiating(true)
+    setStatus('in_progress')
 
     try {
-      const res = await fetch(`${API_BASE}/chat`, {
+      // Use the streaming endpoint for real-time updates
+      const response = await fetch(`${API_BASE}/negotiate/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: userMessage,
-          conversation_id: currentConversation?.id || null,
+          goal: goal.trim(),
+          agent_a_info: agentAInfo.trim(),
+          agent_b_info: agentBInfo.trim(),
         }),
       })
 
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.detail || 'Chat request failed')
+      if (!response.ok) {
+        throw new Error('Failed to start negotiation')
       }
 
-      const data = await res.json()
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
 
-      // Update conversation ID if new
-      if (!currentConversation) {
-        setCurrentConversation({ id: data.conversation_id, title: userMessage.slice(0, 50) })
-        loadConversations()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              if (data.type === 'turn') {
+                setTurns(prev => [...prev, {
+                  turn: data.turn,
+                  agentA: data.agent_a_response,
+                  agentB: data.agent_b_response,
+                  judge: data.judge_evaluation,
+                  progressScore: data.progress_score,
+                }])
+                setCurrentTurn(data.turn)
+                setStatus(data.status)
+              } else if (data.type === 'complete') {
+                setStatus(data.status)
+                setFinalConclusion(data.final_conclusion)
+              } else if (data.type === 'error') {
+                setError(data.message)
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
       }
-
-      // Add assistant message
-      const assistantMsg = {
-        id: 'msg-' + Date.now(),
-        role: 'assistant',
-        content: data.response,
-        agent_steps: data.agent_steps,
-      }
-      setMessages(prev => [...prev, assistantMsg])
-
     } catch (e) {
-      setError(e.message)
-      // Remove the temporary user message on error
-      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id))
+      setError(e.message || 'Negotiation failed')
     } finally {
-      setLoading(false)
+      setIsNegotiating(false)
     }
   }
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
+  const getStatusBadge = () => {
+    if (!status) return null
+
+    const badges = {
+      in_progress: { text: 'In Progress', className: 'status-badge in-progress' },
+      consensus: { text: 'Consensus Reached', className: 'status-badge consensus' },
+      deadlock: { text: 'Deadlock', className: 'status-badge deadlock' },
     }
+
+    const badge = badges[status]
+    return badge ? <span className={badge.className}>{badge.text}</span> : null
   }
 
   return (
     <div className="app">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <h1>Agent Orchestration</h1>
-          <p>LangGraph + LangChain + MongoDB</p>
+      {/* Header */}
+      <header className="app-header">
+        <h1>Agent Negotiation Arena</h1>
+        <div className="header-right">
+          {getStatusBadge()}
+          <div className="health-indicator">
+            <span className={`health-dot ${health?.status === 'healthy' ? 'healthy' : 'unhealthy'}`} />
+            <span>{health?.status === 'healthy' ? 'API Connected' : 'API Disconnected'}</span>
+          </div>
         </div>
+      </header>
 
-        <button className="new-chat-btn" onClick={startNewConversation}>
-          + New Chat
-        </button>
+      {/* Error Banner */}
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+          <button onClick={() => setError(null)}>Dismiss</button>
+        </div>
+      )}
 
-        <div className="conversations-list">
-          {conversations.map(conv => (
-            <div
-              key={conv.id}
-              className={`conversation-item ${currentConversation?.id === conv.id ? 'active' : ''}`}
-              onClick={() => loadConversation(conv.id)}
-            >
-              <span className="conversation-title">{conv.title}</span>
-              <button
-                className="delete-btn"
-                onClick={(e) => deleteConversation(conv.id, e)}
-              >
-                x
-              </button>
+      {/* Main Content */}
+      <main className="main-content">
+        {/* Setup Panel */}
+        <section className="setup-panel">
+          {/* Goal Input */}
+          <div className="goal-section">
+            <label htmlFor="goal">Negotiation Goal</label>
+            <textarea
+              id="goal"
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              placeholder="Enter the objective both agents must work toward...&#10;&#10;Example: Agree on a fair price for the used car that satisfies both buyer and seller."
+              disabled={isNegotiating}
+              rows={3}
+            />
+          </div>
+
+          {/* Agent Info Split */}
+          <div className="agents-split">
+            <div className="agent-panel agent-a">
+              <div className="agent-header">
+                <span className="agent-icon">A</span>
+                <span className="agent-label">Agent A - Private Information</span>
+              </div>
+              <textarea
+                value={agentAInfo}
+                onChange={(e) => setAgentAInfo(e.target.value)}
+                placeholder="Enter Agent A's private constraints and context...&#10;&#10;Example:&#10;You are the buyer.&#10;- Maximum budget: $15,000&#10;- You noticed scratches on the car&#10;- You need the car urgently"
+                disabled={isNegotiating}
+                rows={6}
+              />
             </div>
-          ))}
-        </div>
-      </aside>
 
-      {/* Main Chat Area */}
-      <main className="chat-main">
-        <header className="chat-header">
-          <h2>{currentConversation?.title || 'New Conversation'}</h2>
-          <div className="status-indicator">
-            <span className={`status-dot ${health?.status === 'healthy' ? '' : health?.status === 'error' ? 'error' : 'loading'}`} />
-            <span>
-              {health?.status === 'healthy' ? 'Connected' :
-               health?.status === 'error' ? 'Disconnected' : 'Checking...'}
-            </span>
+            <div className="agent-panel agent-b">
+              <div className="agent-header">
+                <span className="agent-icon">B</span>
+                <span className="agent-label">Agent B - Private Information</span>
+              </div>
+              <textarea
+                value={agentBInfo}
+                onChange={(e) => setAgentBInfo(e.target.value)}
+                placeholder="Enter Agent B's private constraints and context...&#10;&#10;Example:&#10;You are the seller.&#10;- Minimum acceptable price: $12,000&#10;- You recently did expensive maintenance&#10;- You're in no rush to sell"
+                disabled={isNegotiating}
+                rows={6}
+              />
+            </div>
           </div>
-        </header>
 
-        {error && (
-          <div className="error-banner">
-            {error}
+          {/* Action Buttons */}
+          <div className="action-buttons">
+            <button
+              className="start-btn"
+              onClick={startNegotiation}
+              disabled={isNegotiating || !goal.trim() || !agentAInfo.trim() || !agentBInfo.trim()}
+            >
+              {isNegotiating ? 'Negotiating...' : 'Start Negotiation'}
+            </button>
+            {(turns.length > 0 || status) && (
+              <button
+                className="reset-btn"
+                onClick={resetNegotiation}
+                disabled={isNegotiating}
+              >
+                Reset
+              </button>
+            )}
           </div>
+        </section>
+
+        {/* Negotiation Transcript */}
+        {(turns.length > 0 || isNegotiating) && (
+          <section className="transcript-section">
+            <h2>Negotiation Transcript</h2>
+
+            <div className="transcript-container">
+              {turns.map((turn, idx) => (
+                <TurnCard key={idx} turn={turn} />
+              ))}
+
+              {isNegotiating && status === 'in_progress' && (
+                <div className="loading-turn">
+                  <div className="loading-spinner" />
+                  <span>Turn {currentTurn + 1} in progress...</span>
+                </div>
+              )}
+
+              <div ref={transcriptEndRef} />
+            </div>
+          </section>
         )}
 
-        <div className="messages-container">
-          {messages.length === 0 ? (
-            <div className="empty-state">
-              <h3>Start a Conversation</h3>
-              <p>
-                This multi-agent system uses a Research Agent to analyze your query
-                and a Writer Agent to synthesize a comprehensive response.
-              </p>
+        {/* Final Outcome */}
+        {finalConclusion && (
+          <section className={`outcome-section ${status}`}>
+            <h2>
+              {status === 'consensus' ? 'Agreement Reached' : 'Negotiation Ended'}
+            </h2>
+            <div className="outcome-content">
+              <p>{finalConclusion}</p>
             </div>
-          ) : (
-            messages.map(msg => (
-              <Message key={msg.id} message={msg} />
-            ))
-          )}
-
-          {loading && (
-            <div className="loading-indicator">
-              <div className="loading-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <span>Agents are working...</span>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="input-area">
-          <div className="input-wrapper">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type your message..."
-              disabled={loading}
-              rows={1}
-            />
-            <button
-              className="send-btn"
-              onClick={sendMessage}
-              disabled={loading || !input.trim()}
-            >
-              Send
-            </button>
-          </div>
-        </div>
+          </section>
+        )}
       </main>
+
+      {/* Footer */}
+      <footer className="app-footer">
+        <p>Multi-Agent Negotiation System - Powered by Claude</p>
+      </footer>
     </div>
   )
 }
 
-function Message({ message }) {
-  const [showSteps, setShowSteps] = useState(false)
+function TurnCard({ turn }) {
+  const [expanded, setExpanded] = useState(false)
 
   return (
-    <div className={`message ${message.role}`}>
-      <div className="message-role">
-        {message.role === 'user' ? 'You' : 'Assistant'}
-      </div>
-      <div className="message-content">
-        {message.content}
+    <div className="turn-card">
+      <div className="turn-header">
+        <span className="turn-number">Turn {turn.turn}</span>
+        <div className="progress-indicator">
+          <span className="progress-label">Progress:</span>
+          <div className="progress-bar">
+            <div
+              className="progress-fill"
+              style={{ width: `${(turn.progressScore || 0) * 10}%` }}
+            />
+          </div>
+          <span className="progress-value">{turn.progressScore || 0}/10</span>
+        </div>
       </div>
 
-      {message.agent_steps?.length > 0 && (
-        <div className="agent-steps">
+      <div className="turn-content">
+        <div className="agent-message agent-a-msg">
+          <div className="message-header">
+            <span className="agent-badge a">A</span>
+            <span>Agent A</span>
+          </div>
+          <p>{turn.agentA}</p>
+        </div>
+
+        <div className="agent-message agent-b-msg">
+          <div className="message-header">
+            <span className="agent-badge b">B</span>
+            <span>Agent B</span>
+          </div>
+          <p>{turn.agentB}</p>
+        </div>
+      </div>
+
+      {turn.judge && (
+        <div className="judge-section">
           <div
-            className="agent-steps-header"
-            onClick={() => setShowSteps(!showSteps)}
+            className="judge-header"
+            onClick={() => setExpanded(!expanded)}
           >
-            {showSteps ? '[-]' : '[+]'} View agent steps ({message.agent_steps.length})
+            <span className="judge-icon">Judge</span>
+            <span className={`judge-verdict ${turn.judge.progress ? 'progress' : 'no-progress'}`}>
+              {turn.judge.is_consensus
+                ? 'Consensus Detected'
+                : turn.judge.is_deadlock
+                ? 'Deadlock Detected'
+                : turn.judge.progress
+                ? 'Making Progress'
+                : 'No Progress'}
+            </span>
+            <span className="expand-icon">{expanded ? '[-]' : '[+]'}</span>
           </div>
 
-          {showSteps && message.agent_steps.map((step, idx) => (
-            <div key={idx} className="agent-step">
-              <div className="agent-step-name">
-                {step.agent?.toUpperCase() || 'AGENT'} Agent
-              </div>
-              <div className="agent-step-output">
-                {step.output?.slice(0, 300)}
-                {step.output?.length > 300 && '...'}
-              </div>
+          {expanded && (
+            <div className="judge-reasoning">
+              <p>{turn.judge.reasoning}</p>
+              {turn.judge.consensus_summary && (
+                <div className="consensus-summary">
+                  <strong>Summary:</strong> {turn.judge.consensus_summary}
+                </div>
+              )}
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

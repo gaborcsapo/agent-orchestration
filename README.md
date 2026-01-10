@@ -1,91 +1,167 @@
-# Agent Orchestration
+# Agent Negotiation Arena
 
-A multi-agent chat application built with Python, LangGraph, LangChain, FastAPI, React, and MongoDB Atlas.
+A multi-agent negotiation system demonstrating AI agents negotiating with each other based on private information. Two agents (A and B) negotiate turn-by-turn while a Judge evaluates progress, detects deadlocks, and identifies consensus.
 
-## Architecture
+## Features
 
-```
-React Frontend  →  FastAPI Backend  →  LangGraph (Agent Orchestration)
-                          ↓                        ↓
-                    MongoDB Atlas            LangChain → Claude (Anthropic)
-```
-
-**Agents:**
-- **Research Agent**: Analyzes queries and gathers structured insights
-- **Writer Agent**: Synthesizes research into coherent responses
-
-## Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- MongoDB Atlas account (free tier works)
-- Anthropic API key
+- **Three-Agent System**: Agent A, Agent B, and an impartial Judge
+- **Private Information**: Each agent has confidential constraints invisible to the other
+- **Turn-Based Negotiation**: Structured back-and-forth dialogue
+- **Progress Tracking**: Judge evaluates each turn with a progress score (0-10)
+- **Automatic Termination**: Detects consensus (agreement reached) or deadlock (no progress)
+- **Real-Time Streaming**: Watch negotiations unfold turn by turn
+- **Modern UI**: Split-window interface for easy configuration
 
 ## Quick Start
 
-### 1. Clone and Navigate
+### Prerequisites
 
-```bash
-cd agent-orchestration
-```
+- Python 3.9+
+- Node.js 18+
+- Anthropic API key
 
-### 2. Set Up Backend
+### Backend Setup
 
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-```
+# Edit .env and add your ANTHROPIC_API_KEY
 
-### 3. Configure API Keys
-
-Edit `backend/.env` and add your keys:
-
-```env
-# Get from: https://console.anthropic.com/settings/keys
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-
-# Get from: MongoDB Atlas → Connect → Connect your application
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
-```
-
-### 4. Set Up Frontend
-
-```bash
-cd ../frontend
-
-# Install dependencies
-npm install
-```
-
-### 5. Run the Application
-
-**Terminal 1 - Backend:**
-```bash
-cd backend
-source venv/bin/activate
+# Start the server
 uvicorn app.main:app --reload --port 8000
 ```
 
-**Terminal 2 - Frontend:**
+### Frontend Setup
+
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-### 6. Open the App
+Open http://localhost:5173 in your browser.
 
-Visit: http://localhost:5173
+## How It Works
 
-## Verification Steps
+### Negotiation Flow
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                      USER INPUT                                │
+│  Goal + Agent A Private Info + Agent B Private Info           │
+└───────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌───────────────────────────────────────────────────────────────┐
+│                    NEGOTIATION LOOP                            │
+│  1. Agent A makes statement/proposal                          │
+│  2. Agent B responds                                          │
+│  3. Judge evaluates: PROGRESS / DEADLOCK / CONSENSUS          │
+│  4. If PROGRESS → Continue loop                               │
+│     If DEADLOCK → End with deadlock message                   │
+│     If CONSENSUS → End with agreement summary                 │
+└───────────────────────────────────────────────────────────────┘
+```
+
+### Example Use Cases
+
+**Car Sale Negotiation**
+- Goal: Agree on a fair price for a used car
+- Agent A (Buyer): Budget $15,000, noticed scratches
+- Agent B (Seller): Minimum $12,000, recent maintenance done
+
+**Salary Negotiation**
+- Goal: Agree on compensation for a new hire
+- Agent A (Candidate): Wants $150k, has other offers
+- Agent B (Employer): Budget $140k, can offer equity
+
+**Resource Allocation**
+- Goal: Divide a shared budget between departments
+- Agent A (Marketing): Needs $50k for campaign
+- Agent B (Engineering): Needs $40k for infrastructure
+
+## API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/negotiate/start` | Start a new negotiation session |
+| POST | `/api/negotiate/step` | Execute one negotiation round |
+| POST | `/api/negotiate/run` | Run full negotiation until completion |
+| POST | `/api/negotiate/stream` | Stream negotiation via Server-Sent Events |
+| GET | `/api/negotiate/status/{session_id}` | Get negotiation status |
+| GET | `/api/health` | Health check |
+
+## Architecture
+
+```
+Frontend (React + Vite)
+    │
+    ├── Split-window UI for agent configuration
+    ├── Real-time negotiation transcript
+    └── Progress visualization
+    │
+    ▼
+Backend (FastAPI)
+    │
+    ├── Negotiation session management
+    ├── SSE streaming for real-time updates
+    └── In-memory session storage
+    │
+    ▼
+Agent System (LangChain)
+    │
+    ├── Agent A: Negotiator with private info
+    ├── Agent B: Negotiator with private info
+    └── Judge: Progress evaluator
+    │
+    ▼
+Claude API (Anthropic)
+```
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | (required) | Your Anthropic API key |
+| `MAX_NEGOTIATION_TURNS` | 10 | Maximum turns before forced end |
+| `DEADLOCK_THRESHOLD` | 3 | No-progress turns before deadlock |
+| `DEBUG` | true | Enable debug logging |
+
+## Project Structure
+
+```
+agent-orchestration/
+├── backend/
+│   ├── app/
+│   │   ├── agents/        # Agent A, Agent B, Judge
+│   │   ├── api/           # FastAPI routes
+│   │   ├── core/          # Configuration
+│   │   ├── db/            # Pydantic models
+│   │   └── main.py        # Application entry point
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx        # Main React component
+│   │   └── index.css      # Styles
+│   └── package.json
+├── SPECIFICATION.md       # Detailed system specification
+├── CLAUDE.md              # AI coding agent guide
+└── README.md
+```
+
+## Tech Stack
+
+- **Backend**: FastAPI, LangChain, Anthropic Claude
+- **Frontend**: React, Vite
+- **Styling**: CSS with CSS Variables
+
+## Verification
 
 ### Check Backend Health
 
@@ -97,136 +173,31 @@ Expected response:
 ```json
 {
   "status": "healthy",
-  "mongodb": "connected",
   "anthropic": "configured",
   "errors": []
 }
 ```
 
-### Test Chat Endpoint
+### Test Negotiation
 
 ```bash
-curl -X POST http://localhost:8000/api/chat \
+curl -X POST http://localhost:8000/api/negotiate/run \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is Python?"}'
+  -d '{
+    "goal": "Agree on a fair price for the car",
+    "agent_a_info": "Buyer. Max budget $15,000",
+    "agent_b_info": "Seller. Min price $12,000"
+  }'
 ```
-
-## MongoDB Atlas Setup
-
-1. Go to [MongoDB Atlas](https://cloud.mongodb.com)
-2. Create a free cluster (M0 tier)
-3. Create a database user with password
-4. Add your IP to the IP Access List (or use 0.0.0.0/0 for development)
-5. Click "Connect" → "Connect your application"
-6. Copy the connection string and replace `<password>` with your password
-
-## Project Structure
-
-```
-agent-orchestration/
-├── backend/
-│   ├── app/
-│   │   ├── agents/        # LangGraph agent workflow
-│   │   ├── api/           # FastAPI routes
-│   │   ├── core/          # Configuration
-│   │   ├── db/            # MongoDB models & connection
-│   │   └── main.py        # Application entry point
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx        # Main React component
-│   │   └── index.css      # Styles
-│   └── package.json
-├── claude.md              # AI coding agent guide
-└── README.md
-```
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/chat` | Send message, get agent response |
-| GET | `/api/conversations` | List all conversations |
-| GET | `/api/conversations/{id}` | Get conversation with messages |
-| DELETE | `/api/conversations/{id}` | Delete a conversation |
-| GET | `/api/health` | Check system health |
 
 ## Troubleshooting
 
-### "ANTHROPIC_API_KEY not set"
-- Make sure you copied `.env.example` to `.env`
-- Verify your API key is correct (starts with `sk-ant-`)
-
-### "MongoDB connection failed"
-- Check your connection string format
-- Ensure your IP is whitelisted in Atlas
-- Verify the password doesn't have special characters that need URL encoding
-
-### "Cannot connect to backend"
-- Make sure the backend is running on port 8000
-- Check for errors in the backend terminal
-
-### CORS Errors
-- The backend allows localhost:5173 and localhost:3000
-- If using a different port, add it to `app/main.py` CORS origins
-
-## Extending the Application
-
-### Add a New Agent
-
-Edit `backend/app/agents/graph.py`:
-
-```python
-def my_new_agent(state: AgentState) -> AgentState:
-    llm = get_llm()
-    # Your agent logic
-    return {"my_output": result}
-
-# In build_agent_graph():
-workflow.add_node("my_agent", my_new_agent)
-workflow.add_edge("research", "my_agent")  # After research
-workflow.add_edge("my_agent", "writer")     # Before writer
-```
-
-### Add LangChain Tools
-
-```python
-from langchain_core.tools import tool
-
-@tool
-def search_web(query: str) -> str:
-    """Search the web for information."""
-    # Tool implementation
-    return results
-```
-
-### Change the LLM Model
-
-Edit `backend/app/agents/graph.py`:
-
-```python
-def get_llm():
-    return ChatAnthropic(
-        model="claude-sonnet-4-20250514",  # or "claude-haiku-4-5-20251001" for lower cost
-        api_key=settings.anthropic_api_key,
-    )
-```
-
-## Development Commands
-
-```bash
-# Backend
-cd backend
-uvicorn app.main:app --reload          # Dev server with hot reload
-uvicorn app.main:app --host 0.0.0.0    # Expose to network
-
-# Frontend
-cd frontend
-npm run dev      # Dev server
-npm run build    # Production build
-npm run preview  # Preview production build
-```
+| Issue | Solution |
+|-------|----------|
+| "ANTHROPIC_API_KEY not set" | Add key to `.env` file |
+| "Cannot connect to backend" | Run `uvicorn app.main:app` |
+| CORS Errors | Check frontend origin in `main.py` |
+| Negotiation stuck | Check `MAX_NEGOTIATION_TURNS` setting |
 
 ## License
 

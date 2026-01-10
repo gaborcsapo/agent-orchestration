@@ -11,10 +11,6 @@ langchain-anthropic==0.3.0
 langchain-community==0.3.14
 langgraph==0.2.62
 
-# MongoDB
-motor==3.7.0
-pymongo==4.10.1
-
 # Utilities
 httpx==0.28.1
 eval-type-backport==0.3.1  # Python 3.9 compatibility for modern type syntax

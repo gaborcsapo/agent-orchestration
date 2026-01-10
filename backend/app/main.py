@@ -1,8 +1,8 @@
 """
-Agent Orchestration API
+Agent Negotiation API
 
-A FastAPI application that provides a multi-agent chat interface
-using LangGraph, LangChain, and MongoDB Atlas.
+A FastAPI application that provides a multi-agent negotiation system
+using LangGraph and LangChain with Anthropic's Claude.
 """
 
 from contextlib import asynccontextmanager
@@ -10,7 +10,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
-from app.db.mongodb import MongoDB
 from app.api.routes import router
 
 
@@ -31,27 +30,26 @@ async def lifespan(app: FastAPI):
         for error in errors:
             print(f"  - {error}")
         print("=" * 60)
-        print("The API will start but some features may not work.")
+        print("The API will start but negotiation features won't work.")
         print("Run GET /api/health to check status.\n")
     else:
-        # Connect to MongoDB
-        try:
-            await MongoDB.connect()
-        except Exception as e:
-            print(f"\nMongoDB connection failed: {e}")
-            print("The API will start but database features won't work.\n")
+        print("\n" + "=" * 60)
+        print("AGENT NEGOTIATION API")
+        print("=" * 60)
+        print("Configuration OK. API ready.")
+        print("=" * 60 + "\n")
 
     yield
 
     # Shutdown
-    await MongoDB.disconnect()
+    print("\nShutting down Agent Negotiation API...")
 
 
 # Create FastAPI application
 app = FastAPI(
-    title="Agent Orchestration API",
-    description="Multi-agent chat API using LangGraph, LangChain, and MongoDB",
-    version="0.1.0",
+    title="Agent Negotiation API",
+    description="Multi-agent negotiation system using LangGraph and Claude",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -77,8 +75,16 @@ app.include_router(router)
 async def root():
     """Root endpoint with API information."""
     return {
-        "name": "Agent Orchestration API",
-        "version": "0.1.0",
+        "name": "Agent Negotiation API",
+        "version": "1.0.0",
+        "description": "Multi-agent negotiation system with Agent A, Agent B, and a Judge",
         "docs": "/docs",
         "health": "/api/health",
+        "endpoints": {
+            "start_negotiation": "POST /api/negotiate/start",
+            "step_negotiation": "POST /api/negotiate/step",
+            "run_full_negotiation": "POST /api/negotiate/run",
+            "stream_negotiation": "POST /api/negotiate/stream",
+            "get_status": "GET /api/negotiate/status/{session_id}",
+        },
     }

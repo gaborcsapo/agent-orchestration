@@ -1,6 +1,6 @@
 """
 Application configuration with environment variable loading.
-Provides helpful error messages for missing or invalid configuration.
+Simplified configuration for the negotiation system (no MongoDB).
 """
 from __future__ import annotations
 
@@ -15,17 +15,18 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",  # Ignore extra fields from old configs
     )
 
     # Anthropic Configuration
     anthropic_api_key: str = ""
 
-    # MongoDB Configuration
-    mongodb_uri: str = ""
-    mongodb_db_name: str = "agent_orchestration"
-
     # Application Settings
     debug: bool = True
+
+    # Negotiation Settings
+    max_negotiation_turns: int = 10
+    deadlock_threshold: int = 3  # Consecutive no-progress turns before deadlock
 
     def validate_config(self) -> list[str]:
         """
@@ -38,12 +39,6 @@ class Settings(BaseSettings):
             errors.append(
                 "ANTHROPIC_API_KEY is not set. "
                 "Get your key at: https://console.anthropic.com/settings/keys"
-            )
-
-        if not self.mongodb_uri or "username:password" in self.mongodb_uri:
-            errors.append(
-                "MONGODB_URI is not set or contains placeholder values. "
-                "Get your connection string from MongoDB Atlas: https://cloud.mongodb.com"
             )
 
         return errors
