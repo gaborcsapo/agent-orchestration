@@ -56,6 +56,7 @@ Output a JSON object with:
    - "financial_sophistication": assessment of financial knowledge level (REQUIRED - infer from investment choices, account types, diversification, language used)
 
 IMPORTANT RULES:
+- IDENTITY: Always refer to the user by their USER ID (provided in the request), NOT by any names found in the documents. The documents may contain various names due to anonymization - ignore these completely and use only the user_id.
 - ALL fields marked REQUIRED must have substantive values (never "unknown", "not specified", or empty strings)
 - Make intelligent inferences and educated guesses based on available context clues
 - For monthly_income, total_assets, and monthly_liabilities: use baseline ranges if no data (as specified above)
@@ -69,6 +70,7 @@ IMPORTANT RULES:
 - Be thorough and detailed - extract as much information as possible
 - For arrays, provide rich detail, not just bullet points
 - The summary should be comprehensive and insightful (aim for 800-1200 words)
+- In the summary and roast, refer to "the user" or use the user_id - never use names from the documents
 - Output ONLY valid JSON, no additional text before or after."""
 
 

@@ -616,10 +616,10 @@ export default function Home() {
         </div>
 
         {/* Step 2: Document Upload */}
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-green-100 p-6 hover:shadow-2xl transition-shadow duration-300">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Upload className="w-5 h-5 text-green-600" />
+        <div className={`${userColors.bg} rounded-2xl shadow-xl border-3 ${userColors.borderDark} p-6 hover:shadow-2xl transition-shadow duration-300`}>
+          <h2 className={`text-xl font-bold mb-4 flex items-center gap-2 ${userColors.text}`}>
+            <div className="p-2 bg-white/50 rounded-lg">
+              <Upload className={`w-5 h-5 ${userColors.text}`} />
             </div>
             Step 2: Upload Documents
           </h2>
@@ -629,15 +629,15 @@ export default function Home() {
           ) : (
             <>
               <label className="block">
-                <div className="border-3 border-dashed border-green-300 rounded-xl p-10 text-center hover:border-green-500 hover:bg-green-50 cursor-pointer transition-all duration-300 bg-green-50/30">
+                <div className={`border-3 border-dashed ${userColors.border} rounded-xl p-10 text-center hover:opacity-80 cursor-pointer transition-all duration-300 bg-white/50`}>
                   {uploading ? (
                     <div className="flex items-center justify-center gap-3 text-gray-700">
-                      <Loader2 className="w-8 h-8 animate-spin text-green-600" />
+                      <Loader2 className={`w-8 h-8 animate-spin ${userColors.text}`} />
                       <span className="font-semibold">Processing...</span>
                     </div>
                   ) : (
                     <>
-                      <Upload className="w-12 h-12 mx-auto text-green-500 mb-4" />
+                      <Upload className={`w-12 h-12 mx-auto ${userColors.text} mb-4`} />
                       <p className="text-gray-700 font-bold text-lg">Click to upload or drag & drop</p>
                       <p className="text-gray-500 text-sm mt-2 font-medium">
                         PDF, PNG, JPG, WEBP supported
@@ -657,10 +657,10 @@ export default function Home() {
 
               {/* Document Upload Pipeline */}
               {uploadProgressSteps.length > 0 && (uploading || uploadProgressSteps.some(s => s.status === 'completed')) && (
-                <div className="mt-6 p-5 bg-green-50 rounded-xl border-2 border-green-300 shadow-lg">
-                  <h3 className="text-base font-bold text-green-900 mb-4 flex items-center gap-2">
-                    <div className="p-1.5 bg-green-200 rounded-lg">
-                      <Upload className="w-4 h-4 text-green-700" />
+                <div className={`mt-6 p-5 bg-white rounded-xl border-2 ${userColors.border} shadow-lg`}>
+                  <h3 className={`text-base font-bold ${userColors.text} mb-4 flex items-center gap-2`}>
+                    <div className={`p-1.5 ${userColors.bg} rounded-lg`}>
+                      <Upload className={`w-4 h-4 ${userColors.text}`} />
                     </div>
                     Document Upload Pipeline
                   </h3>
@@ -768,10 +768,10 @@ export default function Home() {
 
         {/* Step 3: Document List with Build Context Button */}
         {documents.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl border-2 border-cyan-100 p-6 hover:shadow-2xl transition-shadow duration-300">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-800">
-              <div className="p-2 bg-cyan-100 rounded-lg">
-                <FileText className="w-5 h-5 text-cyan-600" />
+          <div className={`${userColors.bg} rounded-2xl shadow-xl border-3 ${userColors.borderDark} p-6 hover:shadow-2xl transition-shadow duration-300`}>
+            <h2 className={`text-xl font-bold mb-4 flex items-center gap-2 ${userColors.text}`}>
+              <div className="p-2 bg-white/50 rounded-lg">
+                <FileText className={`w-5 h-5 ${userColors.text}`} />
               </div>
               Step 3: Build Financial Context ({documents.length} documents)
             </h2>
@@ -779,7 +779,7 @@ export default function Home() {
               {documents.map((doc) => (
                 <li
                   key={doc.document_id}
-                  className="flex items-center justify-between p-4 bg-cyan-50 rounded-xl border border-cyan-200 hover:shadow-md transition-shadow duration-200"
+                  className={`flex items-center justify-between p-4 bg-white/50 rounded-xl border-2 ${userColors.border} hover:shadow-md transition-shadow duration-200`}
                 >
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-gray-400" />
@@ -815,10 +815,10 @@ export default function Home() {
 
             {/* Context Building Pipeline */}
             {contextProgressSteps.length > 0 && (building || contextProgressSteps.some(s => s.status === 'completed')) && (
-              <div className="mt-6 p-5 bg-cyan-50 rounded-xl border-2 border-cyan-300 shadow-lg">
-                <h3 className="text-base font-bold text-cyan-900 mb-4 flex items-center gap-2">
-                  <div className="p-1.5 bg-cyan-200 rounded-lg">
-                    <Brain className="w-4 h-4 text-cyan-700" />
+              <div className={`mt-6 p-5 bg-white rounded-xl border-2 ${userColors.border} shadow-lg`}>
+                <h3 className={`text-base font-bold ${userColors.text} mb-4 flex items-center gap-2`}>
+                  <div className={`p-1.5 ${userColors.bg} rounded-lg`}>
+                    <Brain className={`w-4 h-4 ${userColors.text}`} />
                   </div>
                   Context Building Pipeline
                 </h3>
