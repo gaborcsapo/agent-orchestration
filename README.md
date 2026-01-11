@@ -1,203 +1,216 @@
-# Agent Negotiation Arena
+# Privacy-Preserving Multi-Agent Negotiation Framework
 
-A multi-agent negotiation system demonstrating AI agents negotiating with each other based on private information. Two agents (A and B) negotiate turn-by-turn while a Judge evaluates progress, detects deadlocks, and identifies consensus.
+A demonstration of **privacy through physical separation** in AI agent negotiations. Each agent runs on its own backend server, ensuring private information cannot leak to the other party.
 
-## Features
+## The Problem
 
-- **Three-Agent System**: Agent A, Agent B, and an impartial Judge
-- **Private Information**: Each agent has confidential constraints invisible to the other
-- **Turn-Based Negotiation**: Structured back-and-forth dialogue
-- **Progress Tracking**: Judge evaluates each turn with a progress score (0-10)
-- **Automatic Termination**: Detects consensus (agreement reached) or deadlock (no progress)
-- **Real-Time Streaming**: Watch negotiations unfold turn by turn
-- **Modern UI**: Split-window interface for easy configuration
+When AI agents negotiate, they must share information to find deals. But sharing too much (like walk-away prices) destroys negotiating power. LLMs are notoriously bad at keeping secrets when instructed via prompts.
 
-## Quick Start
+## Our Solution
 
-### Prerequisites
+**Physical separation**: Each agent runs on its own isolated backend server. Agent A's private data *cannot* reach Agent B because it never leaves Agent A's server.
 
-- Python 3.9+
-- Node.js 18+
-- Anthropic API key
+## Key Innovations
 
-### Backend Setup
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env and add your ANTHROPIC_API_KEY
-
-# Start the server
-uvicorn app.main:app --reload --port 8000
-```
-
-### Frontend Setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open http://localhost:5173 in your browser.
-
-## How It Works
-
-### Negotiation Flow
-
-```
-┌───────────────────────────────────────────────────────────────┐
-│                      USER INPUT                                │
-│  Goal + Agent A Private Info + Agent B Private Info           │
-└───────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌───────────────────────────────────────────────────────────────┐
-│                    NEGOTIATION LOOP                            │
-│  1. Agent A makes statement/proposal                          │
-│  2. Agent B responds                                          │
-│  3. Judge evaluates: PROGRESS / DEADLOCK / CONSENSUS          │
-│  4. If PROGRESS → Continue loop                               │
-│     If DEADLOCK → End with deadlock message                   │
-│     If CONSENSUS → End with agreement summary                 │
-└───────────────────────────────────────────────────────────────┘
-```
-
-### Example Use Cases
-
-**Car Sale Negotiation**
-- Goal: Agree on a fair price for a used car
-- Agent A (Buyer): Budget $15,000, noticed scratches
-- Agent B (Seller): Minimum $12,000, recent maintenance done
-
-**Salary Negotiation**
-- Goal: Agree on compensation for a new hire
-- Agent A (Candidate): Wants $150k, has other offers
-- Agent B (Employer): Budget $140k, can offer equity
-
-**Resource Allocation**
-- Goal: Divide a shared budget between departments
-- Agent A (Marketing): Needs $50k for campaign
-- Agent B (Engineering): Needs $40k for infrastructure
-
-## API Reference
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/negotiate/start` | Start a new negotiation session |
-| POST | `/api/negotiate/step` | Execute one negotiation round |
-| POST | `/api/negotiate/run` | Run full negotiation until completion |
-| POST | `/api/negotiate/stream` | Stream negotiation via Server-Sent Events |
-| GET | `/api/negotiate/status/{session_id}` | Get negotiation status |
-| GET | `/api/health` | Health check |
+| Innovation | What It Does | Why It Matters |
+|------------|--------------|----------------|
+| **Physical Separation** | Each agent runs in its own backend | Privacy through architecture, not prompts |
+| **BATNA Calculator** | Computes walk-away value privately | Agent never accepts deals below this threshold |
+| **CI Gateway** | Filters outgoing messages for leaks | Blocks/transforms sensitive information |
+| **MongoDB Audit Trail** | Logs each agent's thinking privately | Verifiable decisions without data leakage |
 
 ## Architecture
 
 ```
-Frontend (React + Vite)
-    │
-    ├── Split-window UI for agent configuration
-    ├── Real-time negotiation transcript
-    └── Progress visualization
-    │
-    ▼
-Backend (FastAPI)
-    │
-    ├── Negotiation session management
-    ├── SSE streaming for real-time updates
-    └── In-memory session storage
-    │
-    ▼
-Agent System (LangChain)
-    │
-    ├── Agent A: Negotiator with private info
-    ├── Agent B: Negotiator with private info
-    └── Judge: Progress evaluator
-    │
-    ▼
-Claude API (Anthropic)
+┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
+│ Agent A Backend     │  │ Agent B Backend     │  │ Arena Backend       │
+│ localhost:8001      │  │ localhost:8002      │  │ localhost:8000      │
+│                     │  │                     │  │                     │
+│ • Alex's private    │  │ • Jordan's private  │  │ • Orchestrates      │
+│   info stays here   │  │   info stays here   │  │ • Runs Judge        │
+│ • BATNA calculated  │  │ • BATNA calculated  │  │ • Only sees public  │
+│ • CI Gateway filter │  │ • CI Gateway filter │  │   messages          │
+│ • Audit to MongoDB  │  │ • Audit to MongoDB  │  │                     │
+└─────────────────────┘  └─────────────────────┘  └─────────────────────┘
+         │                        │                        │
+         └────────────────────────┼────────────────────────┘
+                                  │
+                     ┌────────────▼────────────┐
+                     │   Next.js Frontend      │
+                     │   localhost:3000        │
+                     │                         │
+                     │   /arena   → Public     │
+                     │   /agent-a → Alex view  │
+                     │   /agent-b → Jordan view│
+                     └─────────────────────────┘
 ```
 
-## Configuration
+## Quick Start
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | (required) | Your Anthropic API key |
-| `MAX_NEGOTIATION_TURNS` | 10 | Maximum turns before forced end |
-| `DEADLOCK_THRESHOLD` | 3 | No-progress turns before deadlock |
-| `DEBUG` | true | Enable debug logging |
+### Prerequisites
+- Python 3.9+
+- Node.js 18+
+- MongoDB Atlas account (free tier works)
+- Anthropic API key
+
+### 1. Configure Environment
+
+Copy the example environment files and add your credentials:
+
+```bash
+# Agent Backend
+cp agent-backend/.env.example agent-backend/.env
+# Edit agent-backend/.env with your ANTHROPIC_API_KEY and MONGODB_URI
+
+# Arena Backend
+cp arena-backend/.env.example arena-backend/.env
+# Edit arena-backend/.env with your ANTHROPIC_API_KEY and MONGODB_URI
+```
+
+### 2. Start All Services
+
+Use the provided startup script:
+
+```bash
+./start-all.sh
+```
+
+Or start services manually:
+
+```bash
+# Terminal 1: Agent A Backend
+cd agent-backend
+source venv/bin/activate
+AGENT_ID=A PORT=8001 uvicorn app.main:app --port 8001
+
+# Terminal 2: Agent B Backend
+cd agent-backend
+source venv/bin/activate
+AGENT_ID=B PORT=8002 uvicorn app.main:app --port 8002
+
+# Terminal 3: Arena Backend
+cd arena-backend
+source venv/bin/activate
+uvicorn app.main:app --port 8000
+
+# Terminal 4: Frontend
+cd frontend-next
+npm run dev
+```
+
+### 3. Run the Demo
+
+Open three browser tabs:
+
+1. **http://localhost:3000/arena** - Create session, watch public negotiation
+2. **http://localhost:3000/agent-a** - Alex's private view (thinking, BATNA, CI Gateway)
+3. **http://localhost:3000/agent-b** - Jordan's private view
+
+## Demo Scenario: Family Trust Fund
+
+Two partners (Alex and Jordan) negotiate monthly contributions to a family trust fund:
+
+**Alex (Partner A)** has constraints:
+- Income: $8,500/month after taxes
+- Student loans: $800/month
+- Maximum contribution: $4,000/month
+- **BATNA**: Won't accept above $3,500/month
+
+**Jordan (Partner B)** has constraints:
+- Income: $12,000/month after taxes
+- No debt payments
+- Wants at least $5,000/month total in the fund
+- **BATNA**: Alex must contribute at least $2,500/month
+
+Watch how each agent:
+1. Thinks through strategy privately
+2. Has their BATNA calculated automatically
+3. Gets messages filtered by the CI Gateway
+4. Never reveals sensitive information
 
 ## Project Structure
 
 ```
 agent-orchestration/
-├── backend/
+├── agent-backend/        # Runs twice (Agent A & B)
 │   ├── app/
-│   │   ├── agents/        # Agent A, Agent B, Judge
-│   │   ├── api/           # FastAPI routes
-│   │   ├── core/          # Configuration
-│   │   ├── db/            # Pydantic models
-│   │   └── main.py        # Application entry point
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx        # Main React component
-│   │   └── index.css      # Styles
-│   └── package.json
-├── SPECIFICATION.md       # Detailed system specification
-├── CLAUDE.md              # AI coding agent guide
-└── README.md
+│   │   ├── main.py       # FastAPI endpoints
+│   │   ├── agent.py      # Thinking, BATNA, CI Gateway
+│   │   ├── db.py         # MongoDB connection
+│   │   └── models.py     # Pydantic models
+│   └── requirements.txt
+├── arena-backend/        # Orchestration service
+│   ├── app/
+│   │   ├── main.py       # FastAPI + SSE streaming
+│   │   ├── judge.py      # Judge evaluation logic
+│   │   └── models.py
+│   └── requirements.txt
+├── frontend-next/        # Next.js 14 app
+│   ├── app/
+│   │   ├── arena/        # Public view
+│   │   ├── agent-a/      # Alex's private view
+│   │   └── agent-b/      # Jordan's private view
+│   └── lib/api.ts
+└── start-all.sh          # Start all services
 ```
 
-## Tech Stack
+## API Endpoints
 
-- **Backend**: FastAPI, LangChain, Anthropic Claude
-- **Frontend**: React, Vite
-- **Styling**: CSS with CSS Variables
+### Arena Backend (port 8000)
+- `POST /api/session/create` - Create new session
+- `GET /api/session/{id}/status` - Get session status
+- `POST /api/session/{id}/start` - Start negotiation
+- `GET /api/session/{id}/stream` - SSE event stream
 
-## Verification
+### Agent Backend (ports 8001, 8002)
+- `POST /api/join` - Join with private info
+- `POST /api/turn` - Generate response (called by Arena)
+- `GET /api/audit/{id}` - Get thinking audit trail
 
-### Check Backend Health
+## How It Works
 
-```bash
-curl http://localhost:8000/api/health
-```
+### Turn Pipeline (on agent's server)
+1. **Receive** goal + history from Arena
+2. **Load** private info from memory
+3. **Generate thinking** via LLM (logged to MongoDB)
+4. **Calculate BATNA** from private constraints
+5. **Generate response** based on strategy
+6. **CI Gateway filter** blocks/transforms leaks
+7. **BATNA validation** ensures no bad deals accepted
+8. **Return** only the filtered public message
 
-Expected response:
-```json
-{
-  "status": "healthy",
-  "anthropic": "configured",
-  "errors": []
-}
-```
+### Privacy Guarantees
+- Private info stored only in agent's backend memory
+- MongoDB audit collections are per-agent
+- CI Gateway filters before any network transmission
+- Arena only receives public messages
 
-### Test Negotiation
+## MongoDB Collections
 
-```bash
-curl -X POST http://localhost:8000/api/negotiate/run \
-  -H "Content-Type: application/json" \
-  -d '{
-    "goal": "Agree on a fair price for the car",
-    "agent_a_info": "Buyer. Max budget $15,000",
-    "agent_b_info": "Seller. Min price $12,000"
-  }'
-```
+- `agent_a_audit` - Alex's private thinking trail
+- `agent_b_audit` - Jordan's private thinking trail
+- `public_sessions` - Only public messages visible
 
-## Troubleshooting
+## The Demo Story (3 minutes)
 
-| Issue | Solution |
-|-------|----------|
-| "ANTHROPIC_API_KEY not set" | Add key to `.env` file |
-| "Cannot connect to backend" | Run `uvicorn app.main:app` |
-| CORS Errors | Check frontend origin in `main.py` |
-| Negotiation stuck | Check `MAX_NEGOTIATION_TURNS` setting |
+**Setup (30 sec):**
+> "When AI agents negotiate, they need to share information to find deals. But sharing too much—like your walk-away price—lets the other side exploit you. We solved this with physical separation."
+
+**Demo (2 min):**
+> Open three browser tabs: Agent A (Alex), Agent B (Jordan), Arena (neutral).
+>
+> "Alex enters their private constraints: max contribution $4,000, student loans $800/month. This stays on Agent A's server."
+>
+> "Jordan enters their constraints: income $12,000, wants at least $5,000 total in fund. This stays on Agent B's server."
+>
+> "Watch the negotiation in the Arena—only public messages appear."
+>
+> "Now look at Alex's tab. You can see their THINKING: 'My BATNA is $3,500, so I won't accept above that.' And the CI Gateway log shows what was filtered."
+>
+> "Jordan has completely different thinking that Alex never sees."
+
+**Close (30 sec):**
+> "This is Privacy Through Physical Separation with a full audit trail. Each agent's reasoning is logged for transparency, but that reasoning never crosses to the other side."
 
 ## License
 
