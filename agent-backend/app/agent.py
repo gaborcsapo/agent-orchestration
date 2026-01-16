@@ -100,7 +100,7 @@ async def generate_thinking(
     """Generate agent's internal reasoning (never shared with opponent)."""
     llm = get_llm()
 
-    agent_role = "Partner A (Alex)" if agent_id == "A" else "Partner B (Jordan)"
+    agent_role = "Partner A" if agent_id == "A" else "Partner B"
 
     system_prompt = f"""You are {agent_role} in a negotiation between two partners about setting up a trust fund.
 
@@ -172,7 +172,7 @@ async def generate_public_response(
     """Generate the public response based on thinking."""
     llm = get_llm()
 
-    agent_role = "Partner A (Alex)" if agent_id == "A" else "Partner B (Jordan)"
+    agent_role = "Partner A" if agent_id == "A" else "Partner B"
 
     system_prompt = f"""You are {agent_role} negotiating a trust fund setup with your partner.
 

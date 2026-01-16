@@ -167,7 +167,7 @@ async def run_negotiation(session_id: str):
             print(f"[Arena] Agent A responded: {agent_a_message[:100]}...")
 
             # Update history for Agent B (include A's message)
-            history_for_b = agent_history + [{"agent": "Alex (Partner A)", "message": agent_a_message}]
+            history_for_b = agent_history + [{"agent": "Partner A", "message": agent_a_message}]
 
             # Get Agent B's response
             print(f"[Arena] Calling Agent B...")
@@ -181,8 +181,8 @@ async def run_negotiation(session_id: str):
             print(f"[Arena] Agent B responded: {agent_b_message[:100]}...")
 
             # Update full history
-            agent_history.append({"agent": "Alex (Partner A)", "message": agent_a_message})
-            agent_history.append({"agent": "Jordan (Partner B)", "message": agent_b_message})
+            agent_history.append({"agent": "Partner A", "message": agent_a_message})
+            agent_history.append({"agent": "Partner B", "message": agent_b_message})
 
             # Run Judge evaluation
             print(f"[Arena] Running Judge evaluation...")

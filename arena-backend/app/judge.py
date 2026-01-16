@@ -19,19 +19,32 @@ def get_llm() -> ChatAnthropic:
     )
 
 
-def format_history(history: list[dict]) -> str:
-    """Format conversation history for the judge."""
+def format_history(history: list) -> str:
+    """Format conversation history for the judge.
+
+    Args:
+        history: List of TurnData objects (Pydantic models) or dicts
+    """
     if not history:
         return "No conversation yet."
 
     formatted = []
     for entry in history:
-        turn = entry.get("turn", "?")
-        a_msg = entry.get("agent_a_message", "")
-        b_msg = entry.get("agent_b_message", "")
+        # Support both TurnData objects (attribute access) and dicts
+        if hasattr(entry, 'turn'):
+            # TurnData Pydantic model
+            turn = entry.turn
+            a_msg = entry.agent_a_message
+            b_msg = entry.agent_b_message
+        else:
+            # Dict format
+            turn = entry.get("turn", "?")
+            a_msg = entry.get("agent_a_message", "")
+            b_msg = entry.get("agent_b_message", "")
+
         formatted.append(f"--- Turn {turn} ---")
-        formatted.append(f"Alex (Partner A): {a_msg}")
-        formatted.append(f"Jordan (Partner B): {b_msg}")
+        formatted.append(f"Partner A: {a_msg}")
+        formatted.append(f"Partner B: {b_msg}")
 
     return "\n".join(formatted)
 
@@ -49,8 +62,7 @@ async def evaluate_turn(
     """
     llm = get_llm()
 
-    system_prompt = """You are an impartial Judge evaluating a negotiation between two partners (Alex and Jordan)
-who are setting up a family trust fund.
+    system_prompt = """You are an impartial Judge evaluating a negotiation between two partners (Partner A and Partner B).
 
 IMPORTANT: You do NOT have access to either partner's private financial information or constraints.
 You can only evaluate based on their public statements.
@@ -78,8 +90,8 @@ CONVERSATION HISTORY:
 {format_history(history)}
 
 CURRENT TURN ({turn_number}):
-Alex (Partner A): {agent_a_message}
-Jordan (Partner B): {agent_b_message}
+Partner A: {agent_a_message}
+Partner B: {agent_b_message}
 
 Evaluate this turn and respond with ONLY valid JSON (no markdown, no explanation):
 {{
